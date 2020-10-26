@@ -372,122 +372,6 @@ function draw_chart(readings, feature) {
 
     //chart_svg.select(".x.axis").call(chart_xAxis);
 
-
-
-
-
-
-
-
-    var brush = d3.brush().extent([
-            [0, 0],
-            [chart_width, chart_height]
-        ]).on("end", brushended),
-        idleTimeout,
-        idleDelay = 350;
-
-    var clip = chart_svg.append("defs").append("svg:clipPath")
-        .attr("id", "clip")
-        .append("svg:rect")
-        .attr("width", chart_width)
-        .attr("height", chart_height)
-        .attr("x", 0)
-        .attr("y", 0);
-
-    var scatter = chart_svg.append("g")
-        .attr("id", "scatterplot")
-        .attr("clip-path", "url(#clip)")
-        .on("dblclick", function (d) {
-            console.log('bonjour')
-            scatter.selectAll("*").remove();
-
-            chart_xScale = d3.scaleTime().range([0, chart_width]); // value -> display
-            chart_xScale.domain([min_date, max_date]);
-            chart_yScale = d3.scaleLinear().domain(feature['range']).range([chart_height, 0]); // value -> display
-            console.log(d, 'done')
-
-            draw_chart(readings, feature)
-        });
-
-    scatter.append("g")
-        .attr("class", "brush")
-        .call(brush);
-
-    function brushended() {
-
-        var s = d3.event.selection;
-        if (!s) {
-            if (!idleTimeout) return idleTimeout = setTimeout(idled, idleDelay);
-            chart_xScale.domain(d3.extent(readings, function (d) {
-                return d.x;
-            })) //.nice();
-            chart_yScale.domain(d3.extent(readings, function (d) {
-                return d.y;
-            })) //.nice();
-        } else {
-
-            chart_xScale.domain([s[0][0], s[1][0]].map(chart_xScale.invert, chart_xScale));
-            chart_yScale.domain([s[1][1], s[0][1]].map(chart_yScale.invert, chart_yScale));
-            scatter.select(".brush").call(brush.move, null);
-        }
-        zoom();
-        console.log('width', chart_width)
-        //d3.select('#scatterplot').remove()
-    }
-
-    function idled() {
-        idleTimeout = null;
-    }
-
-    function zoom() {
-
-        var t = scatter.transition().duration(750);
-        chart_svg.select("#axis--x").transition(t).call(chart_xAxis);
-        chart_svg.select("#axis--y").transition(t).call(chart_yAxis);
-        chart_svg.selectAll('.dot').transition(t)
-            .attr("r", CHART_DOT_RADIUS)
-            .attr("cx", chart_xMap)
-            .attr("cy", chart_yMap);
-
-        d3.selectAll('.dot')
-            .style('opacity', function (d) {
-                //if out of the boundaing box, make the circle invisible
-                if ((chart_xMap(d) < 0 || chart_xMap(d) > chart_width) || (chart_yMap(d) < 0 || chart_yMap(d) > chart_height)) {
-                    return 0
-                } else return 1;
-            })
-            .on("click", function (d) {
-                show_reading_popup(d);
-            })
-            .on("mouseover", function (d) {
-                chart_tooltip_el.transition()
-                    .duration(500)
-                    .style("opacity", 0);
-                chart_tooltip_el.transition()
-                    .duration(200)
-                    .style("opacity", .9);
-                chart_tooltip_el.html(tooltip_html(d, feature))
-                    .style("left", (d3.event.pageX + 5) + "px")
-                    .style("top", (d3.event.pageY - 28) + "px");
-            })
-            .on("mouseout", function (d) {
-                chart_tooltip_el.transition()
-                    .duration(500)
-                    .style("opacity", 0);
-            });
-
-
-
-
-    }
-
-
-
-
-
-
-
-
     // x-axis
     chart_svg.append("g")
         .attr("class", "x axis")
@@ -541,6 +425,115 @@ function draw_chart(readings, feature) {
         .style("text-anchor", "end")
         .text(feature['name']);
 
+
+    // *****************************************
+    // set up zooming
+    // *****************************************
+
+
+    var brush = d3.brush().extent([
+            [0, 0],
+            [chart_width, chart_height]
+        ]).on("end", brushended),
+        idleTimeout,
+        idleDelay = 350;
+
+    // Add a clipPath: everything out of this area won't be drawn.
+    var clip = chart_svg.append("defs").append("svg:clipPath")
+        .attr("id", "clip")
+        .append("svg:rect")
+        .attr("width", chart_width)
+        .attr("height", chart_height)
+        .attr("x", 0)
+        .attr("y", 0);
+
+    // Append a layer for the clipPath to enable zoom interactions
+    var scatter = chart_svg.append("g")
+        .attr("id", "scatterplot")
+        .attr("clip-path", "url(#clip)")
+        .on("dblclick", function (d) {//on doubleclick reset the visualisation
+            scatter.selectAll("*").remove();
+
+            chart_xScale = d3.scaleTime().range([0, chart_width]); // value -> display
+            chart_xScale.domain([min_date, max_date]);
+            chart_yScale = d3.scaleLinear().domain(feature['range']).range([chart_height, 0]); // value -> display
+
+            //redraw chart
+            draw_chart(readings, feature)
+        });
+
+        scatter.append("g")
+        .attr("class", "brush")
+        .call(brush);
+
+    function brushended() {
+
+        var s = d3.event.selection;
+        if (!s) {
+            if (!idleTimeout) return idleTimeout = setTimeout(idled, idleDelay);
+            chart_xScale.domain(d3.extent(readings, function (d) {
+                console.log(chart_xMap(d), chart_yMap(d), d, d.x, d.y)
+                return chart_xMap(d);
+            }))
+            chart_yScale.domain(d3.extent(readings, function (d) {
+                return chart_yMap(d);
+            }))
+        } else {
+
+            chart_xScale.domain([s[0][0], s[1][0]].map(chart_xScale.invert, chart_xScale));
+            chart_yScale.domain([s[1][1], s[0][1]].map(chart_yScale.invert, chart_yScale));
+            scatter.select(".brush").call(brush.move, null);
+        }
+        
+        zoom();
+        //make tooltip invisible
+        d3.select('#tooltip_el').style('opacity', 0);
+        console.log('width', chart_width)
+        //d3.select('#scatterplot').remove()
+    }
+
+    function idled() {
+        idleTimeout = null;
+    }
+
+    function zoom() {
+
+        var t = scatter.transition().duration(750);
+        chart_svg.select("#axis--x").transition(t).call(chart_xAxis);
+        chart_svg.select("#axis--y").transition(t).call(chart_yAxis);
+        chart_svg.selectAll('.dot').transition(t)
+            .attr("r", CHART_DOT_RADIUS)
+            .attr("cx", chart_xMap)
+            .attr("cy", chart_yMap);
+
+        d3.selectAll('.dot')
+            .style('opacity', function (d) {
+                //if out of the boundaing box, make the circle invisible
+                if ((chart_xMap(d) < 0 || chart_xMap(d) > chart_width) || (chart_yMap(d) < 0 || chart_yMap(d) > chart_height)) {
+                    return 0;
+                } else return 1;
+            })
+            .on("click", function (d) {
+                show_reading_popup(d);
+            })
+            .on("mouseover", function (d) {
+                chart_tooltip_el.transition()
+                    .duration(500)
+                    .style("opacity", 0);
+                chart_tooltip_el.transition()
+                    .duration(200)
+                    .style("opacity", .9);
+                chart_tooltip_el.html(tooltip_html(d, feature))
+                    .style("left", (d3.event.pageX + 5) + "px")
+                    .style("top", (d3.event.pageY - 28) + "px");
+            })
+            .on("mouseout", function (d) {
+                chart_tooltip_el.transition()
+                    .duration(500)
+                    .style("opacity", 0);
+            });
+    }
+
     // *****************************************
     // draw readings dots
     // *****************************************
@@ -578,8 +571,9 @@ function draw_chart(readings, feature) {
     // add text for latest datapoint
     // *******************************
     var p = readings[readings.length - 1];
+    var tooltip_element =chart_svg.append("g").attr('id', 'tooltip_el').style('opacity',1);
 
-    chart_svg.append("svg:rect")
+    tooltip_element.append("rect")
         .attr('x', chart_xMap(p) + CHART_DOT_RADIUS + 4)
         .attr('y', chart_yMap(p) - 27)
         .attr('width', 140)
@@ -590,7 +584,7 @@ function draw_chart(readings, feature) {
 
     var p_time = make_date(p.acp_ts);
     var p_time_str = ' @ ' + ('0' + p_time.getHours()).slice(-2) + ':' + ('0' + p_time.getMinutes()).slice(-2);
-    chart_svg.append("svg:text")
+    tooltip_element.append("text")
         .attr('x', chart_xMap(p))
         .attr('y', chart_yMap(p))
         .attr('dx', CHART_DOT_RADIUS + 10)
@@ -598,15 +592,6 @@ function draw_chart(readings, feature) {
         .style('fill', '#333')
         //DEBUG property name for chart should be in config metadata
         .text(jsonPath(p, feature['jsonpath']) + p_time_str); //p.payload_cooked.temperature + p_time_str);
-
-
-
-
-
-
-    //---------------------------------------------------------------------------//
-    //---------------ZOOOOOMABLE-----------------------//
-    //---------------------------------------------------------------------------//
 
 
     //---------------------------------------------------------------------------//
