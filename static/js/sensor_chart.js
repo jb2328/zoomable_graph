@@ -496,6 +496,7 @@ function draw_chart(readings, feature) {
         idleTimeout = null;
     }
 
+    //zoom and change axes
     function zoom() {
 
         var t = scatter.transition().duration(750);
@@ -506,6 +507,7 @@ function draw_chart(readings, feature) {
             .attr("cx", chart_xMap)
             .attr("cy", chart_yMap);
 
+        //add interactivity for all data points (copied from below)
         d3.selectAll('.dot')
             .style('opacity', function (d) {
                 //if out of the boundaing box, make the circle invisible
