@@ -20,6 +20,8 @@ var chart_tooltip_el;
 var chart_width;
 var chart_height;
 var chart_svg; // chart svg element
+var chart_graph; // chart svg element
+
 
 // Called on page load
 function init() {
@@ -369,17 +371,19 @@ function draw_chart(readings, feature) {
         x_tick_count = 12;
 
     chart_xAxis = d3.axisBottom().scale(chart_xScale).ticks(x_tick_count);
-
     //chart_svg.select(".x.axis").call(chart_xAxis);
 
+    //make a chart_graph variable that had elements within the svg
+    chart_graph= chart_svg.append("g").attr('id', "graph_elements").style('opacity',0);
+
     // x-axis
-    chart_svg.append("g")
+    chart_graph.append("g")
         .attr("class", "x axis")
         .attr('id', "axis--x")
         .attr("transform", "translate(0," + chart_height + ")")
         .call(chart_xAxis
             .tickSize(-chart_height, 0, 0)
-            .tickFormat(d3.timeFormat("%H"))
+            .tickFormat(d3.timeFormat("%H:%M"))
         )
         .attr("class", "grid")
         .append("text")
@@ -409,7 +413,7 @@ function draw_chart(readings, feature) {
     }; // data -> display
 
     // y-axis
-    chart_svg.append("g")
+    chart_graph.append("g")
         .attr("class", "y axis")
         .attr('id', "axis--y")
         .call(chart_yAxis
@@ -439,7 +443,7 @@ function draw_chart(readings, feature) {
         idleDelay = 350;
 
     // Add a clipPath: everything out of this area won't be drawn.
-    var clip = chart_svg.append("defs").append("svg:clipPath")
+    var clip = chart_graph.append("defs").append("svg:clipPath")
         .attr("id", "clip")
         .append("svg:rect")
         .attr("width", chart_width)
@@ -448,18 +452,14 @@ function draw_chart(readings, feature) {
         .attr("y", 0);
 
     // Append a layer for the clipPath to enable zoom interactions
-    var scatter = chart_svg.append("g")
+    var scatter = chart_graph.append("g")
         .attr("id", "scatterplot")
         .attr("clip-path", "url(#clip)")
         .on("dblclick", function (d) {//on doubleclick reset the visualisation
-            scatter.selectAll("*").remove();
-
-            chart_xScale = d3.scaleTime().range([0, chart_width]); // value -> display
-            chart_xScale.domain([min_date, max_date]);
-            chart_yScale = d3.scaleLinear().domain(feature['range']).range([chart_height, 0]); // value -> display
 
             //redraw chart
-            draw_chart(readings, feature)
+            scatter.selectAll("*").remove();
+            draw_chart(readings, feature);
         });
 
         scatter.append("g")
@@ -468,11 +468,10 @@ function draw_chart(readings, feature) {
 
     function brushended() {
 
-        var s = d3.event.selection;
+        let s = d3.event.selection;
         if (!s) {
             if (!idleTimeout) return idleTimeout = setTimeout(idled, idleDelay);
             chart_xScale.domain(d3.extent(readings, function (d) {
-                console.log(chart_xMap(d), chart_yMap(d), d, d.x, d.y)
                 return chart_xMap(d);
             }))
             chart_yScale.domain(d3.extent(readings, function (d) {
@@ -488,8 +487,7 @@ function draw_chart(readings, feature) {
         zoom();
         //make tooltip invisible
         d3.select('#tooltip_el').style('opacity', 0);
-        console.log('width', chart_width)
-        //d3.select('#scatterplot').remove()
+
     }
 
     function idled() {
@@ -500,9 +498,9 @@ function draw_chart(readings, feature) {
     function zoom() {
 
         var t = scatter.transition().duration(750);
-        chart_svg.select("#axis--x").transition(t).call(chart_xAxis);
-        chart_svg.select("#axis--y").transition(t).call(chart_yAxis);
-        chart_svg.selectAll('.dot').transition(t)
+        chart_graph.select("#axis--x").transition(t).call(chart_xAxis);
+        chart_graph.select("#axis--y").transition(t).call(chart_yAxis);
+        chart_graph.selectAll('.dot').transition(t)
             .attr("r", CHART_DOT_RADIUS)
             .attr("cx", chart_xMap)
             .attr("cy", chart_yMap);
@@ -539,7 +537,7 @@ function draw_chart(readings, feature) {
     // *****************************************
     // draw readings dots
     // *****************************************
-    chart_svg.selectAll(".dot")
+    chart_graph.selectAll(".dot")
         .data(readings)
         .enter().append("circle")
         .attr("class", "dot")
@@ -573,7 +571,7 @@ function draw_chart(readings, feature) {
     // add text for latest datapoint
     // *******************************
     var p = readings[readings.length - 1];
-    var tooltip_element =chart_svg.append("g").attr('id', 'tooltip_el').style('opacity',1);
+    var tooltip_element =chart_graph.append("g").attr('id', 'tooltip_el').style('opacity',1);
 
     tooltip_element.append("rect")
         .attr('x', chart_xMap(p) + CHART_DOT_RADIUS + 4)
@@ -596,6 +594,7 @@ function draw_chart(readings, feature) {
         .text(jsonPath(p, feature['jsonpath']) + p_time_str); //p.payload_cooked.temperature + p_time_str);
 
 
+        chart_graph.transition().duration(500).style('opacity',1)
     //---------------------------------------------------------------------------//
     //---------------------------------------------------------------------------//
     //---------------------------------------------------------------------------//
