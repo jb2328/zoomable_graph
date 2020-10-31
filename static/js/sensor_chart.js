@@ -56,7 +56,7 @@ function init() {
 function get_readings() {
     console.log('loading data')
 
-    d3.json("sample_data.json").then(function (data) {
+    d3.json("sample_8x8_data.json").then(function (data) {
         handle_readings(data);
         console.log(data)
     });
@@ -374,7 +374,7 @@ function draw_chart(readings, feature) {
     //chart_svg.select(".x.axis").call(chart_xAxis);
 
     //make a chart_graph variable that had elements within the svg
-    chart_graph= chart_svg.append("g").attr('id', "graph_elements").style('opacity',0);
+    chart_graph = chart_svg.append("g").attr('id', "graph_elements").style('opacity', 0);
 
     // x-axis
     chart_graph.append("g")
@@ -455,14 +455,14 @@ function draw_chart(readings, feature) {
     var scatter = chart_graph.append("g")
         .attr("id", "scatterplot")
         .attr("clip-path", "url(#clip)")
-        .on("dblclick", function (d) {//on doubleclick reset the visualisation
+        .on("dblclick", function (d) { //on doubleclick reset the visualisation
 
             //redraw chart
             scatter.selectAll("*").remove();
             draw_chart(readings, feature);
         });
 
-        scatter.append("g")
+    scatter.append("g")
         .attr("class", "brush")
         .call(brush);
 
@@ -483,7 +483,7 @@ function draw_chart(readings, feature) {
             chart_yScale.domain([s[1][1], s[0][1]].map(chart_yScale.invert, chart_yScale));
             scatter.select(".brush").call(brush.move, null);
         }
-        
+
         zoom();
         //make tooltip invisible
         d3.select('#tooltip_el').style('opacity', 0);
@@ -517,15 +517,7 @@ function draw_chart(readings, feature) {
                 show_reading_popup(d);
             })
             .on("mouseover", function (d) {
-                chart_tooltip_el.transition()
-                    .duration(500)
-                    .style("opacity", 0);
-                chart_tooltip_el.transition()
-                    .duration(200)
-                    .style("opacity", .9);
-                chart_tooltip_el.html(tooltip_html(d, feature))
-                    .style("left", (d3.event.pageX + 5) + "px")
-                    .style("top", (d3.event.pageY - 28) + "px");
+                mouse_over_interactions(d, feature)
             })
             .on("mouseout", function (d) {
                 chart_tooltip_el.transition()
@@ -551,15 +543,7 @@ function draw_chart(readings, feature) {
             show_reading_popup(d);
         })
         .on("mouseover", function (d) {
-            chart_tooltip_el.transition()
-                .duration(500)
-                .style("opacity", 0);
-            chart_tooltip_el.transition()
-                .duration(200)
-                .style("opacity", .9);
-            chart_tooltip_el.html(tooltip_html(d, feature))
-                .style("left", (d3.event.pageX + 5) + "px")
-                .style("top", (d3.event.pageY - 28) + "px");
+            mouse_over_interactions(d, feature);
         })
         .on("mouseout", function (d) {
             chart_tooltip_el.transition()
@@ -571,7 +555,7 @@ function draw_chart(readings, feature) {
     // add text for latest datapoint
     // *******************************
     var p = readings[readings.length - 1];
-    var tooltip_element =chart_graph.append("g").attr('id', 'tooltip_el').style('opacity',1);
+    var tooltip_element = chart_graph.append("g").attr('id', 'tooltip_el').style('opacity', 1);
 
     tooltip_element.append("rect")
         .attr('x', chart_xMap(p) + CHART_DOT_RADIUS + 4)
@@ -594,21 +578,123 @@ function draw_chart(readings, feature) {
         .text(jsonPath(p, feature['jsonpath']) + p_time_str); //p.payload_cooked.temperature + p_time_str);
 
 
-        chart_graph.transition().duration(500).style('opacity',1)
+    chart_graph.transition().duration(500).style('opacity', 1)
     //---------------------------------------------------------------------------//
     //---------------------------------------------------------------------------//
     //---------------------------------------------------------------------------//
 } // end draw_chart
 
 
+//created a 'bag' function that has d3 interactivity for hover over circles
+//I thought it was easier than having duplicated chunks of code
+function mouse_over_interactions(d, feature) {
+    chart_tooltip_el.transition()
+        .duration(500)
+        .style("opacity", 0);
+    chart_tooltip_el.transition()
+        .duration(200)
+        .style("opacity", .9);
+    chart_tooltip_el.html(tooltip_html(d, feature))
+        .style("left", (d3.event.pageX + 5) + "px")
+        .style("top", (d3.event.pageY - 28) + "px");
+    try {
+        draw_heatmap(d);
+    } catch (error) {
+        console.log('no elsys eye: ', error)
+    }
+}
+//draw an 8x8 matrix for elsys-eye sensors
+function draw_heatmap(d) {
+    //list for reformatted data
+    let grid_data = [];
+
+    //data cleanup
+    for (let i = 0; i < d.payload_cooked.grideye.length; i++) {
+        grid_data.push({
+            'value': d.payload_cooked.grideye[i],
+            'id': i,
+            'y_pos': Math.floor(i / 8),
+            'x_pos': Math.floor(i % 8)
+        });
+    }
+
+    // set the dimensions and margins of the graph
+    let tt_margin = {
+            top: 30,
+            right: 30,
+            bottom: 30,
+            left: 30
+        },
+        tt_width = 250 - tt_margin.left - tt_margin.right,
+        tt_height = 250 - tt_margin.top - tt_margin.bottom;
+
+    // append the svg object to the body of the page
+    let tt_svg = d3.select('#chart_tooltip')
+        .append("svg")
+        .attr("width", tt_width + tt_margin.left + tt_margin.right)
+        .attr("height", tt_height + tt_margin.top + tt_margin.bottom)
+        .append("g")
+        .attr("transform",
+            "translate(" + tt_margin.left + "," + tt_margin.top + ")");
+
+    // Labels of row and columns
+    let myGroups = [0, 1, 2, 3, 4, 5, 6, 7]
+    let myVars = [0, 1, 2, 3, 4, 5, 6, 7]
+
+    // Build X scales and axis:
+    let x = d3.scaleBand()
+        .range([0, tt_width])
+        .domain(myGroups)
+        .padding(0.01);
+
+    // tt_svg.append("g")
+    //     .attr("transform", "translate(0," + tt_height + ")")
+    //     .call(d3.axisBottom(x))
+
+    // Build X scales and axis:
+    let y = d3.scaleBand()
+        .range([0, tt_height])
+        .domain(myVars)
+        .padding(0.01);
+
+    // tt_svg.append("g")
+    //     .call(d3.axisLeft(y));
+
+    // Build color scale
+    let myColor = d3.scaleSequential(d3.interpolateTurbo)
+        .domain([-5, 35])
+
+    tt_svg.selectAll()
+        .data(grid_data, function (d, i) {
+            return d;
+        })
+        .enter()
+        .append("rect")
+        .attr("x", function (d) {
+            return x(d.x_pos)
+        })
+        .attr("y", function (d) {
+            return y(d.y_pos)
+        })
+        .attr("width", x.bandwidth())
+        .attr("height", y.bandwidth())
+        .style("fill", function (d) {
+            return myColor(d.value)
+        });
+
+    console.log('showing 8x8', grid_data)
+}
+
 // Create a plot TOOLTIP our of the point data
 //debug write this tooltip_html() for acp_web
 function tooltip_html(p, feature) {
+
     var str = '';
     //DEBUG this property should be configurable
     if (jsonPath(p, feature['jsonpath']) != false) { //p.payload_cooked.temperature) {
         str += '<br/>' + feature['name'] + ':' + jsonPath(p, feature['jsonpath']); //p.payload_cooked.temperature.toFixed(1);
     }
+
     str += '<br/>Time:' + make_date(p.acp_ts);
     return str;
 }
