@@ -15,7 +15,6 @@ var loading_el; // loading element animated gif
 var reading_popup_el; // div to display full reading json
 var feature_select_el; // feature select element
 var chart_tooltip_el;
-var zoom_hint_el; // div containing zoom/unzoom hint message
 
 // Chart parameters
 var chart_width;
@@ -36,7 +35,6 @@ function init() {
 
     // Animated "loading" gif, shows until readings are loaded from api
     loading_el = document.getElementById('loading');
-    zoom_hint_el = document.getElementById('zoom_hint');
     feature_select_el = document.getElementById("form_feature");
     chart_tooltip_el = d3.select('#chart_tooltip'); //document.getElementById('chart_tooltip');
 
@@ -45,42 +43,27 @@ function init() {
 
     form_date.setAttribute('value', plot_date);
 
-    set_zoom_hint(true); // Put 'drag to zoom' text in the zoom hint div
-
     init_reading_popup();
 
     // set up layout / axes of scatterplot
     init_chart();
 
-    get_local_readings();
+    get_readings();
 
 }
 
 // Use API_READINGS to retrieve requested sensor readings
 function get_readings() {
-    var readings_url = API_READINGS + 'get_day/' + ACP_ID + '/' +
-                      '?date=' + plot_date +
-                      '&metadata=true';
-
-    console.log("using readings URL: "+readings_url);
-
-    var jsonData = $.ajax({
-      url: readings_url,
-      dataType: 'json',
-      async: true,
-      headers: {"Access-Control-Allow-Origin": "*"},
-    }).done(handle_readings);
-  }
-
-function get_local_readings() {
     console.log('loading data')
 
     d3.json("sample_8x8_data.json").then(function (data) {
         handle_readings(data);
         console.log(data)
     });
-  }
 
+
+
+}
 
 // API http call has returned these results { readings: ..., sensor_metadata: ...}
 function handle_readings(results) {
@@ -204,14 +187,6 @@ function set_date_onclicks(feature_id) {
     document.getElementById("forward_1_day").onclick = function () {
         date_shift(1, feature_id)
     };
-}
-
-function set_zoom_hint(zoom) {
-    if (zoom) {
-        zoom_hint_el.innerHTML = '(drag a box to zoom in)';
-    } else {
-        zoom_hint_el.innerHTML = '(doubleclick to zoom back out)';
-    }
 }
 
 // Subscribe to RTMonitor to receive incremental data points and update chart
@@ -399,7 +374,7 @@ function draw_chart(readings, feature) {
     //chart_svg.select(".x.axis").call(chart_xAxis);
 
     //make a chart_graph variable that had elements within the svg
-    chart_graph= chart_svg.append("g").attr('id', "graph_elements").style('opacity',0);
+    chart_graph = chart_svg.append("g").attr('id', "graph_elements").style('opacity', 0);
 
     // x-axis
     chart_graph.append("g")
@@ -408,7 +383,7 @@ function draw_chart(readings, feature) {
         .attr("transform", "translate(0," + chart_height + ")")
         .call(chart_xAxis
             .tickSize(-chart_height, 0, 0)
-            .tickFormat(d3.timeFormat("%H:%M")) // Default time scale format
+            .tickFormat(d3.timeFormat("%H:%M"))
         )
         .attr("class", "grid")
         .append("text")
@@ -480,15 +455,14 @@ function draw_chart(readings, feature) {
     var scatter = chart_graph.append("g")
         .attr("id", "scatterplot")
         .attr("clip-path", "url(#clip)")
-        .on("dblclick", function (d) {//on doubleclick reset the visualisation
+        .on("dblclick", function (d) { //on doubleclick reset the visualisation
 
             //redraw chart
             scatter.selectAll("*").remove();
             draw_chart(readings, feature);
-            set_zoom_hint(true); // Update zoom hint to re-explain how to zoom.
         });
 
-        scatter.append("g")
+    scatter.append("g")
         .attr("class", "brush")
         .call(brush);
 
@@ -523,8 +497,6 @@ function draw_chart(readings, feature) {
     //zoom and change axes
     function zoom() {
 
-        set_zoom_hint(false); // hint how to zoom back out
-
         var t = scatter.transition().duration(750);
         chart_graph.select("#axis--x").transition(t).call(chart_xAxis);
         chart_graph.select("#axis--y").transition(t).call(chart_yAxis);
@@ -545,12 +517,12 @@ function draw_chart(readings, feature) {
                 show_reading_popup(d);
             })
             .on("mouseover", function (d) {
-                mouseover_interactions(d, feature);
+                mouse_over_interactions(d, feature)
             })
             .on("mouseout", function (d) {
                 chart_tooltip_el.transition()
                     .duration(500)
-                    .style("opacity", 1);
+                    .style("opacity", 0);
             });
     }
 
@@ -571,7 +543,7 @@ function draw_chart(readings, feature) {
             show_reading_popup(d);
         })
         .on("mouseover", function (d) {
-            mouseover_interactions(d, feature);
+            mouse_over_interactions(d, feature);
         })
         .on("mouseout", function (d) {
             chart_tooltip_el.transition()
@@ -583,7 +555,7 @@ function draw_chart(readings, feature) {
     // add text for latest datapoint
     // *******************************
     var p = readings[readings.length - 1];
-    var tooltip_element =chart_graph.append("g").attr('id', 'tooltip_el').style('opacity',1);
+    var tooltip_element = chart_graph.append("g").attr('id', 'tooltip_el').style('opacity', 1);
 
     tooltip_element.append("rect")
         .attr('x', chart_xMap(p) + CHART_DOT_RADIUS + 4)
@@ -602,9 +574,11 @@ function draw_chart(readings, feature) {
         .attr('dx', CHART_DOT_RADIUS + 10)
         .style('font-size', '22px')
         .style('fill', '#333')
-        .text(jsonPath(p, feature['jsonpath']) + p_time_str);
+        //DEBUG property name for chart should be in config metadata
+        .text(jsonPath(p, feature['jsonpath']) + p_time_str); //p.payload_cooked.temperature + p_time_str);
 
-        chart_graph.transition().duration(200).style('opacity',1)
+
+    chart_graph.transition().duration(500).style('opacity', 1)
     //---------------------------------------------------------------------------//
     //---------------------------------------------------------------------------//
     //---------------------------------------------------------------------------//
@@ -613,7 +587,7 @@ function draw_chart(readings, feature) {
 
 //created a 'bag' function that has d3 interactivity for hover over circles
 //I thought it was easier than having duplicated chunks of code
-function mouseover_interactions(d, feature) {
+function mouse_over_interactions(d, feature) {
     chart_tooltip_el.transition()
         .duration(500)
         .style("opacity", 0);
@@ -623,8 +597,6 @@ function mouseover_interactions(d, feature) {
     chart_tooltip_el.html(tooltip_html(d, feature))
         .style("left", (d3.event.pageX + 5) + "px")
         .style("top", (d3.event.pageY - 28) + "px");
-    
-        //heatmap is within try/catch since not all sensors have 8x8s
     try {
         draw_heatmap(d);
     } catch (error) {
@@ -648,10 +620,10 @@ function draw_heatmap(d) {
 
     // set the dimensions and margins of the graph
     let tt_margin = {
-            top: 15,
-            right: 15,
-            bottom: 15,
-            left: 15
+            top: 30,
+            right: 30,
+            bottom: 30,
+            left: 30
         },
         tt_width = 250 - tt_margin.left - tt_margin.right,
         tt_height = 250 - tt_margin.top - tt_margin.bottom;
@@ -713,23 +685,17 @@ function draw_heatmap(d) {
     console.log('showing 8x8', grid_data)
 }
 
-
 // Create a plot TOOLTIP our of the point data
 //debug write this tooltip_html() for acp_web
 function tooltip_html(p, feature) {
-    let str = '';
-    let p_time = make_date(p.acp_ts);
-    let p_time_str = ('0' + p_time.getHours()).slice(-2) + ':' +
-                     ('0' + p_time.getMinutes()).slice(-2) + ':' +
-                     ('0' + p_time.getSeconds()).slice(-2);
-    let tz = p_time.toTimeString().match(/\((.+)\)/)[1];
 
-    if (jsonPath(p, feature['jsonpath']) != false) {
-        str += '<br/>'+feature['name'] + ':' + jsonPath(p, feature['jsonpath']);
+    var str = '';
+    //DEBUG this property should be configurable
+    if (jsonPath(p, feature['jsonpath']) != false) { //p.payload_cooked.temperature) {
+        str += '<br/>' + feature['name'] + ':' + jsonPath(p, feature['jsonpath']); //p.payload_cooked.temperature.toFixed(1);
     }
 
-    str += '<br/>'+p_time_str + ' ' + tz;
-
+    str += '<br/>Time:' + make_date(p.acp_ts);
     return str;
 }
 
